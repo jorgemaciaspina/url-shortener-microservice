@@ -5,14 +5,40 @@ import "net/http"
 import "encoding/json"
 import "math/rand"
 import "time"
+import "os"
+import "strings"
+
+import "context"
+import "github.com/redis/go-redis/v9"
 
 type URL struct {
 	Original string `json:"original"`
 	ShortCode string `json:"short_code"`
 }
 
-// In-memory store
-var urlStore = make(map[string]string)
+// In-memory store (Replace with Redis for production)
+// var urlStore = make(map[string]string)
+// Redis client
+var ctx = context.Background()
+var redis_db *redis.Client
+func init() {
+	redis_url := os.Getenv("URL_SHORTENER_REDIS")
+	if len(redis_url) == 0 {
+		redis_url = "localhost"
+	}
+	redis_port := os.Getenv("URL_SHORTENER_REDIS_PORT")
+	if len(redis_port) == 0 {
+		redis_port = "6379"
+	}
+	
+	var string_builder strings.Builder
+	string_builder.WriteString(redis_url)
+	string_builder.WriteString(":")
+	string_builder.WriteString(redis_port)
+	redis_db = redis.NewClient(&redis.Options{
+		Addr: string_builder.String(),
+	})
+}
 
 // Generate random short code
 func generateCode() string {
@@ -40,7 +66,13 @@ func shortenHandler(response_writer http.ResponseWriter, request *http.Request) 
 	}
 
 	code := generateCode()
-	urlStore[code] = input.Original
+	// Replaced by redis
+	// urlStore[code] = input.Original
+	err = redis_db.Set(ctx, code, input.Original, 0).Err()
+	if err != nil {
+		http.Error(response_writer, "Database error", http.StatusInternalServerError)
+		return
+	}
 
 	response := URL{Original: input.Original, ShortCode: code}
 	response_writer.Header().Set("Content-Type", "application/json")
@@ -50,10 +82,19 @@ func shortenHandler(response_writer http.ResponseWriter, request *http.Request) 
 // GET: /
 func redirectHandler(response_writer http.ResponseWriter, request *http.Request) {
 	code := request.URL.Path[1:] // Remove leading /
-	original, exists := urlStore[code]
-	fmt.Println("original", original, "exists", exists)
-	if !exists {
+	// Replaced by redis
+	// original, exists := urlStore[code]
+	original, err := redis_db.Get(ctx, code).Result()
+	// fmt.Println("original", original, "exists", exists)
+	// if !exists {
+	// 	http.Error(response_writer, "Not found", http.StatusNotFound)
+	// 	return
+	// }
+	if err == redis.Nil {
 		http.Error(response_writer, "Not found", http.StatusNotFound)
+		return
+	} else if err != nil {
+		http.Error(response_writer, "Database error", http.StatusInternalServerError)
 		return
 	}
 	http.Redirect(response_writer, request, original, http.StatusFound)
