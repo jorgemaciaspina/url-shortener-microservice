@@ -1,6 +1,5 @@
 package main
 
-import "fmt"
 import "net/http"
 import "encoding/json"
 import "math/rand"
@@ -8,8 +7,12 @@ import "time"
 import "os"
 import "strings"
 
+// REDIS
 import "context"
 import "github.com/redis/go-redis/v9"
+
+// LOGGING
+import logger "github.com/sirupsen/logrus"
 
 type URL struct {
 	Original string `json:"original"`
@@ -101,8 +104,9 @@ func redirectHandler(response_writer http.ResponseWriter, request *http.Request)
 }
 
 func main() {
+	logger.SetFormatter(&logger.JSONFormatter{})
 	http.HandleFunc("/shorten", shortenHandler)
 	http.HandleFunc("/", redirectHandler)
-	fmt.Println("Server running on http://localhost:8080")
+	logger.Info("Server running on http://localhost:8080")
 	http.ListenAndServe(":8080", nil)
 }
