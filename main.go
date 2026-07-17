@@ -14,6 +14,18 @@ import "github.com/redis/go-redis/v9"
 // LOGGING
 import logger "github.com/sirupsen/logrus"
 
+// MONITORING
+import "github.com/prometheus/client_golang/prometheus"
+import "github.com/prometheus/client_golang/prometheus/promhttp"
+
+var prometheus_requests = prometheus.NewCounter(prometheus.CounterOpts{
+	Name: "http_requests_total",
+	Help: "Total number of HTTP requests",
+})
+func init_prometheus() {
+	prometheus.MustRegister(prometheus_requests)
+}
+
 type URL struct {
 	Original string `json:"original"`
 	ShortCode string `json:"short_code"`
@@ -41,6 +53,8 @@ func init() {
 	redis_db = redis.NewClient(&redis.Options{
 		Addr: string_builder.String(),
 	})
+
+	init_prometheus()
 }
 
 // Generate random short code
@@ -56,6 +70,7 @@ func generateCode() string {
 
 // Post: shortener
 func shortenHandler(response_writer http.ResponseWriter, request *http.Request) {
+	prometheus_requests.Inc()
 	if request.Method != http.MethodPost {
 		http.Error(response_writer, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -84,6 +99,7 @@ func shortenHandler(response_writer http.ResponseWriter, request *http.Request) 
 
 // GET: /
 func redirectHandler(response_writer http.ResponseWriter, request *http.Request) {
+	prometheus_requests.Inc()
 	code := request.URL.Path[1:] // Remove leading /
 	// Replaced by redis
 	// original, exists := urlStore[code]
@@ -107,6 +123,7 @@ func main() {
 	logger.SetFormatter(&logger.JSONFormatter{})
 	http.HandleFunc("/shorten", shortenHandler)
 	http.HandleFunc("/", redirectHandler)
+	http.Handle("/metrics", promhttp.Handler())
 	logger.Info("Server running on http://localhost:8080")
 	http.ListenAndServe(":8080", nil)
 }
