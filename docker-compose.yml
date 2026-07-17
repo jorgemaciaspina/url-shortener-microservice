@@ -1,0 +1,15 @@
+services:
+  url-shortener:
+    build: .
+    ports:
+      - "8080:8080"
+    depends_on:
+      - redis
+    environment:
+      - URL_SHORTENER_REDIS=redis
+      - URL_SHORTENER_REDIS_PORT=${URL_SHORTENER_REDIS_PORT}
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
